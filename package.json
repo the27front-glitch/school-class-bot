@@ -1,0 +1,36 @@
+{
+  "name": "school-class-bot",
+  "version": "1.0.0",
+  "description": "Maktab sinflari uchun Telegram boshqaruv boti (Davomat, Jadval, Testlar, Reyting)",
+  "type": "module",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "dev": "node --watch src/bot.js",
+    "prisma:generate": "npx prisma generate",
+    "prisma:push": "npx prisma db push"
+  },
+  "keywords": [
+    "telegram-bot",
+    "grammy",
+    "school",
+    "attendance",
+    "quiz"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^2.20.0",
+    "@grammyjs/conversations": "^2.1.1",
+    "@grammyjs/menu": "^1.5.0",
+    "@grammyjs/runner": "^2.0.3",
+    "@prisma/client": "5.22.0",
+    "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
+    "grammy": "^1.46.0",
+    "node-cron": "^4.6.0"
+  },
+  "devDependencies": {
+    "prisma": "5.22.0"
+  }
+}

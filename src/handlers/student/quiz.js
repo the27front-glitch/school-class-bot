@@ -1,0 +1,224 @@
+import { prisma } from "../../database/prisma.js";
+import { config } from "../../config/config.js";
+import { InlineKeyboard } from "grammy";
+
+// In-memory active quiz sessions for students: Map<`studentId_quizId`, { currentQuestionIndex, answers: [] }>
+const activeStudentSessions = new Map();
+
+/**
+ * Show available quizzes for the student
+ * @param {import("grammy").Context} ctx
+ */
+export async function showAvailableQuizzes(ctx) {
+  const userId = String(ctx.from.id);
+  const student = await prisma.student.findUnique({
+    where: { telegramId: userId },
+    include: { quizSubmissions: true },
+  });
+
+  if (!student) {
+    return ctx.reply("❌ Siz o'quvchi sifatida ro'yxatdan o'tmagansiz.");
+  }
+
+  const now = new Date();
+  const submittedQuizIds = student.quizSubmissions.map((s) => s.quizId);
+
+  // Find active quizzes not submitted yet
+  const availableQuizzes = await prisma.quiz.findMany({
+    where: {
+      isActive: true,
+      id: { notIn: submittedQuizIds },
+      OR: [
+        { deadline: null },
+        { deadline: { gt: now } },
+      ],
+    },
+    include: { questions: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (availableQuizzes.length === 0) {
+    return ctx.reply(
+      "📝 <b>Hozirda topshirilishi kerak bo'lgan yangi testlar mavjud emas.</b>\n\n" +
+      "Barcha mavjud testlarni ishlab bo'lgansiz yoki yangi testlar yuklanmagan.",
+      { parse_mode: "HTML" }
+    );
+  }
+
+  let text = "📝 <b>TOPShIRISh UChUN MAVJUD TESTLAR:</b>\n\n";
+  const keyboard = new InlineKeyboard();
+
+  availableQuizzes.forEach((quiz, idx) => {
+    const deadlineText = quiz.deadline
+      ? `⏳ Muddat: ${new Date(quiz.deadline).toLocaleString("uz-UZ")} gacha`
+      : "⏳ Muddat: Cheklanmagan";
+
+    text += `<b>${idx + 1}. [${quiz.subject}] ${quiz.title}</b>\n` +
+      `   └ Savollar: ${quiz.questions.length} ta\n` +
+      `   └ ${deadlineText}\n\n`;
+
+    keyboard.text(`▶️ ${quiz.title} (${quiz.subject})`, `start_test:${quiz.id}`).row();
+  });
+
+  return ctx.reply(text, {
+    parse_mode: "HTML",
+    reply_markup: keyboard,
+  });
+}
+
+/**
+ * Start taking a quiz
+ * @param {import("grammy").Context} ctx
+ */
+export async function startQuizCallback(ctx) {
+  const quizId = parseInt(ctx.callbackQuery.data.split(":")[1], 10);
+  const userId = String(ctx.from.id);
+
+  const student = await prisma.student.findUnique({
+    where: { telegramId: userId },
+  });
+
+  if (!student) {
+    return ctx.answerCallbackQuery({ text: "O'quvchi topilmadi!", show_alert: true });
+  }
+
+  const quiz = await prisma.quiz.findUnique({
+    where: { id: quizId },
+    include: { questions: true },
+  });
+
+  if (!quiz || !quiz.isActive) {
+    return ctx.answerCallbackQuery({ text: "Bu test yopilgan yoki mavjud emas!", show_alert: true });
+  }
+
+  // Check if already submitted
+  const existingSub = await prisma.quizSubmission.findUnique({
+    where: {
+      quizId_studentId: {
+        quizId,
+        studentId: student.id,
+      },
+    },
+  });
+
+  if (existingSub) {
+    return ctx.answerCallbackQuery({ text: "Siz bu testni allaqachon topshirgansiz!", show_alert: true });
+  }
+
+  // Initialize session
+  const sessionKey = `${student.id}_${quiz.id}`;
+  activeStudentSessions.set(sessionKey, {
+    quizId,
+    studentId: student.id,
+    questionIndex: 0,
+    answers: [],
+    questions: quiz.questions,
+  });
+
+  await ctx.answerCallbackQuery();
+  return renderQuestion(ctx, sessionKey);
+}
+
+/**
+ * Render current question for active quiz session
+ */
+async function renderQuestion(ctx, sessionKey) {
+  const session = activeStudentSessions.get(sessionKey);
+  if (!session) {
+    return ctx.editMessageText("❌ Test sessiyasi muddati tugagan.");
+  }
+
+  const currentQ = session.questions[session.questionIndex];
+  const total = session.questions.length;
+  const options = JSON.parse(currentQ.options);
+
+  const letters = ["A", "B", "C", "D"];
+  let text = `📝 <b>Savol ${session.questionIndex + 1}/${total}:</b>\n\n` +
+    `<b>${currentQ.text}</b>\n\n`;
+
+  options.forEach((opt, idx) => {
+    text += `<b>${letters[idx]})</b> ${opt}\n`;
+  });
+
+  const keyboard = new InlineKeyboard();
+  options.forEach((_, idx) => {
+    keyboard.text(`${letters[idx]}`, `ans_q:${sessionKey}:${idx}`);
+  });
+
+  if (ctx.callbackQuery) {
+    return ctx.editMessageText(text, {
+      parse_mode: "HTML",
+      reply_markup: keyboard,
+    });
+  } else {
+    return ctx.reply(text, {
+      parse_mode: "HTML",
+      reply_markup: keyboard,
+    });
+  }
+}
+
+/**
+ * Handle student answering a question
+ */
+export async function answerQuestionCallback(ctx) {
+  const parts = ctx.callbackQuery.data.split(":");
+  const sessionKey = parts[1];
+  const choiceIndex = parseInt(parts[2], 10);
+
+  const session = activeStudentSessions.get(sessionKey);
+  if (!session) {
+    await ctx.answerCallbackQuery({ text: "Sessiya topilmadi!", show_alert: true });
+    return;
+  }
+
+  session.answers.push(choiceIndex);
+  session.questionIndex++;
+
+  await ctx.answerCallbackQuery({ text: "Javobingiz qabul qilindi!" });
+
+  if (session.questionIndex < session.questions.length) {
+    return renderQuestion(ctx, sessionKey);
+  }
+
+  // Quiz Finished -> calculate score
+  let score = 0;
+  session.questions.forEach((q, idx) => {
+    if (session.answers[idx] === q.correctIndex) {
+      score++;
+    }
+  });
+
+  const totalQuestions = session.questions.length;
+  const earnedPoints = score * config.quizPointMultiplier;
+
+  // Save submission to DB
+  await prisma.quizSubmission.create({
+    data: {
+      quizId: session.quizId,
+      studentId: session.studentId,
+      score,
+      totalQuestions,
+    },
+  });
+
+  // Update student total points
+  await prisma.student.update({
+    where: { id: session.studentId },
+    data: {
+      points: {
+        increment: earnedPoints,
+      },
+    },
+  });
+
+  activeStudentSessions.delete(sessionKey);
+
+  const resultText =
+    `🎉 <b>TEST YAKUNLANDI!</b>\n\n` +
+    `📊 To'g'ri javoblar: <b>${score} / ${totalQuestions}</b>\n` +
+    `⭐️ To'plangan ball: <b>+${earnedPoints} ball</b>\n\n` +
+    `<i>Natijangiz umumiy oylik reytingga qo'shildi!</i>`;
+
+  return ctx.editMessageText(resultText, { parse_mode: "HTML" });
+}

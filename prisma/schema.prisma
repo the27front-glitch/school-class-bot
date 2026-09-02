@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Student {
+  id              Int              @id @default(autoincrement())
+  fullName        String
+  telegramId      String?          @unique
+  username        String?
+  points          Int              @default(0)
+  bonusPoints     Int              @default(0)
+  createdAt       DateTime         @default(now())
+  attendances     Attendance[]
+  quizSubmissions QuizSubmission[]
+}
+
+model Attendance {
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date      String
+  status    String   @default("PRESENT")
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@unique([studentId, date])
+}
+
+model Schedule {
+  id          Int     @id @default(autoincrement())
+  dayOfWeek   Int     // 1: Dushanba, ..., 6: Shanba
+  lessonOrder Int     // 1, 2, 3, 4, 5, 6, 7
+  subject     String
+  room        String?
+  teacher     String?
+
+  @@unique([dayOfWeek, lessonOrder])
+}
+
+model Quiz {
+  id              Int              @id @default(autoincrement())
+  title           String
+  subject         String
+  durationMinutes Int              @default(0)
+  deadline        DateTime?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  questions       Question[]
+  submissions     QuizSubmission[]
+}
+
+model Question {
+  id           Int    @id @default(autoincrement())
+  quizId       Int
+  quiz         Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  text         String
+  options      String // JSON string array: ["A", "B", "C", "D"]
+  correctIndex Int    // 0, 1, 2, 3
+}
+
+model QuizSubmission {
+  id             Int      @id @default(autoincrement())
+  quizId         Int
+  quiz           Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  studentId      Int
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  score          Int
+  totalQuestions Int
+  isManual       Boolean  @default(false)
+  submittedAt    DateTime @default(now())
+
+  @@unique([quizId, studentId])
+}
+
+model Announcement {
+  id        Int      @id @default(autoincrement())
+  text      String
+  createdAt DateTime @default(now())
+}
