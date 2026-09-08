@@ -5,7 +5,10 @@ import { initScheduler } from "./cron/scheduler.js";
 
 // Handlers
 import { startHandler } from "./handlers/common/start.js";
-import { linkStudentCallback } from "./handlers/student/register.js";
+import {
+  linkStudentCallback,
+  verifyStudentPinConversation,
+} from "./handlers/student/register.js";
 import {
   showStudentsList,
   addStudentConversation,
@@ -70,6 +73,7 @@ bot.use(createConversation(addStudentConversation));
 bot.use(createConversation(editScheduleConversation));
 bot.use(createConversation(giveBonusConversation));
 bot.use(createConversation(broadcastConversation));
+bot.use(createConversation(verifyStudentPinConversation));
 
 // -------------------------------------------------------------
 // Commands

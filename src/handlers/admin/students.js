@@ -26,9 +26,13 @@ export async function showStudentsList(ctx) {
 
   let text = `👥 <b>Sinf o'quvchilari ro'yxati (Jami: ${students.length} ta):</b>\n\n`;
   students.forEach((st, idx) => {
-    const statusIcon = st.telegramId ? "📱 (Botga ulangan)" : "👤 (Telefonsiz/Oflayn)";
-    text += `<b>${idx + 1}. ${st.fullName}</b> ${statusIcon}\n   └ Ballar: <b>${st.points + st.bonusPoints} ball</b> (ID: ${st.id})\n`;
+    const statusIcon = st.telegramId ? "📱 (Ulangan)" : "👤 (Ulanmagan)";
+    const pin = st.pinCode || "1234";
+    text += `<b>${idx + 1}. ${st.fullName}</b> ${statusIcon}\n` +
+      `   └ 🔐 PIN-kod: <code>${pin}</code> | Ball: <b>${st.points + st.bonusPoints}</b> (ID: ${st.id})\n`;
   });
+
+  text += `\n💡 <i>O'quvchi botga kirib o'z ismini tanlaganda yuqoridagi 4 xonali PIN-kodni kiritishi kerak bo'ladi.</i>`;
 
   const keyboard = new InlineKeyboard()
     .text("➕ Yangi o'quvchi qo'shish", "admin_add_student")
@@ -42,12 +46,37 @@ export async function showStudentsList(ctx) {
 }
 
 /**
+ * Helper to parse student name and PIN
+ */
+function parseStudentLine(line) {
+  const trimmed = line.trim();
+  // Check for formats like: "Ali Valiyev (1234)" or "Ali Valiyev - 1234" or "Ali Valiyev 1234"
+  const pinMatch = trimmed.match(/^(.*?)(?:[\(\[\-\:\,\s]+(\d{3,6})[\)\]]*)?$/);
+
+  if (pinMatch && pinMatch[2]) {
+    const name = pinMatch[1].trim();
+    const pin = pinMatch[2].trim();
+    if (name.length >= 2) {
+      return { fullName: name, pinCode: pin };
+    }
+  }
+
+  // If only name provided, generate 4-digit random pin
+  const randomPin = String(Math.floor(1000 + Math.random() * 9000));
+  return { fullName: trimmed, pinCode: randomPin };
+}
+
+/**
  * Conversation: Add new student
  */
 export async function addStudentConversation(conversation, ctx) {
   await ctx.reply(
-    "✏️ <b>Yangi o'quvchi(lar)ni qo'shish:</b>\n\n" +
-    "O'quvchining Ism Familiyasini yozib yuboring.\n" +
+    "✏️ <b>YANGI O'QUVChI(LAR)NI QO'SHISH:</b>\n\n" +
+    "O'quvchining Ism Familiyasini va ixtiyoriy PIN-kodini yozib yuboring.\n\n" +
+    "<b>Misollar:</b>\n" +
+    "• <code>Ali Valiyev (1234)</code>\n" +
+    "• <code>Rustam Karimov (5544)</code>\n" +
+    "• <code>Sobir Baxtiyorov</code> (agar PIN yozmasangiz, bot o'zi avtomatik 4 xonali PIN beradi)\n\n" +
     "<i>Bir nechta o'quvchini qo'shish uchun har birini yangi qatordan yozishingiz mumkin.</i>\n\n" +
     "Bekor qilish uchun /cancel deb yozing.",
     { parse_mode: "HTML" }
@@ -68,22 +97,27 @@ export async function addStudentConversation(conversation, ctx) {
     .map((l) => l.trim())
     .filter(Boolean);
 
-  let addedCount = 0;
-  for (const name of lines) {
-    if (name.length >= 2) {
-      await prisma.student.create({
+  let addedList = [];
+  for (const line of lines) {
+    const parsed = parseStudentLine(line);
+    if (parsed.fullName.length >= 2) {
+      const created = await prisma.student.create({
         data: {
-          fullName: name,
+          fullName: parsed.fullName,
+          pinCode: parsed.pinCode,
         },
       });
-      addedCount++;
+      addedList.push(created);
     }
   }
 
-  return ctx.reply(
-    `✅ <b>Muvaffaqiyatli saqlandi!</b>\n\nJami qo'shilgan o'quvchilar soni: <b>${addedCount} ta</b>.`,
-    { parse_mode: "HTML" }
-  );
+  let resultMsg = `✅ <b>${addedList.length} ta o'quvchi muvaffaqiyatli saqlandi!</b>\n\n`;
+  addedList.forEach((st, idx) => {
+    resultMsg += `<b>${idx + 1}. ${st.fullName}</b> ➡️ PIN: <code>${st.pinCode}</code>\n`;
+  });
+  resultMsg += `\n<i>PIN-kodlarni o'quvchilarga bering. Ular botga kirganda shu PIN orqali hisobini faollashtiradi.</i>`;
+
+  return ctx.reply(resultMsg, { parse_mode: "HTML" });
 }
 
 /**

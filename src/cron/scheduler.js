@@ -116,14 +116,14 @@ export function initScheduler(bot) {
     }
   });
 
-  // 5. Har kuni soat 08:30 da: Adminga davomat eslatmasi (Dushanba-Shanba)
-  cron.schedule("30 8 * * 1-6", async () => {
+  // 5. Har kuni soat 12:20 da: Adminga davomat eslatmasi (2-smena Dushanba-Shanba)
+  cron.schedule("20 12 * * 1-6", async () => {
     try {
       for (const adminId of config.adminIds) {
         try {
           await bot.api.sendMessage(
             adminId,
-            "🔔 <b>Eslatma:</b> Bugungi kun uchun sinf davomatini belgilashni unutmang!\n\n/davomat buyrug'ini bosing.",
+            "🔔 <b>Eslatma (2-smena):</b> Darslar boshlandi! Bugungi kun uchun sinf davomatini belgilashni unutmang!\n\n/davomat buyrug'ini bosing.",
             { parse_mode: "HTML" }
           );
         } catch (e) {}

@@ -2,14 +2,12 @@ import { prisma } from "../../database/prisma.js";
 import { getStudentMainMenu } from "../../keyboards/student.menu.js";
 
 /**
- * Handle student self-linking via inline keyboard
+ * Handle student selecting their name -> start PIN verification conversation
  * @param {import("grammy").Context} ctx
  */
 export async function linkStudentCallback(ctx) {
   const data = ctx.callbackQuery.data;
   const studentId = parseInt(data.split(":")[1], 10);
-  const userId = String(ctx.from.id);
-  const username = ctx.from.username || null;
 
   // Check if student exists and not already linked
   const student = await prisma.student.findUnique({
@@ -17,36 +15,94 @@ export async function linkStudentCallback(ctx) {
   });
 
   if (!student) {
-    await ctx.answerCallbackQuery({ text: "O'quvchi topilmadi!", show_alert: true });
-    return;
+    return ctx.answerCallbackQuery({ text: "O'quvchi topilmadi!", show_alert: true });
   }
 
   if (student.telegramId) {
-    await ctx.answerCallbackQuery({
-      text: "Bu o'quvchi allaqachon boshqa Telegram akkauntga biriktirilgan!",
+    return ctx.answerCallbackQuery({
+      text: "Bu o'quvchi allaqachon boshqa Telegram hisobiga ulangan!",
       show_alert: true,
     });
-    return;
   }
 
-  // Link telegram ID
-  await prisma.student.update({
+  await ctx.answerCallbackQuery();
+  ctx.session.selectedStudentId = studentId;
+  return ctx.conversation.enter("verifyStudentPinConversation");
+}
+
+/**
+ * Conversation: Verify Student PIN-code
+ */
+export async function verifyStudentPinConversation(conversation, ctx) {
+  const studentId = ctx.session.selectedStudentId;
+  if (!studentId) {
+    return ctx.reply("❌ Xatolik yuz berdi. Iltimos /start buyrug'ini qaytadan bosing.");
+  }
+
+  const student = await prisma.student.findUnique({
     where: { id: studentId },
-    data: {
-      telegramId: userId,
-      username: username,
-    },
   });
 
-  await ctx.answerCallbackQuery({ text: "Muvaffaqiyatli biriktirildi! 🎉" });
-  await ctx.editMessageText(
-    `✅ <b>Tabriklaymiz, ${student.fullName}!</b>\n\n` +
-    `Sizning Telegram hisobingiz sinf ro'yxatiga muvaffaqiyatli biriktirildi.\n` +
-    `Endi testlarni ishlashingiz, ballaringizni va dars jadvalini ko'rishingiz mumkin.`,
+  if (!student || student.telegramId) {
+    return ctx.reply("❌ Bu o'quvchi mavjud emas yoki allaqachon biriktirilgan.");
+  }
+
+  await ctx.reply(
+    `🔐 <b>Xavfsizlik tekshiruvi:</b>\n\n` +
+    `Hurmatli <b>${student.fullName}</b>!\n` +
+    `O'z profilingizni tasdiqlash uchun o'qituvchingiz bergan <b>4 xonali PIN-kod</b>ni kiriting:\n\n` +
+    `<i>Bekor qilish uchun /cancel deb yozing.</i>`,
     { parse_mode: "HTML" }
   );
 
-  return ctx.reply("Asosiy menyu:", {
-    reply_markup: getStudentMainMenu(),
-  });
+  let attempts = 3;
+  while (attempts > 0) {
+    const msg = await conversation.wait();
+    if (msg.message?.text === "/cancel") {
+      return ctx.reply("❌ Ro'yxatdan o'tish bekor qilindi. Qayta boshlash uchun /start bosing.");
+    }
+
+    const inputPin = msg.message?.text?.trim();
+    const correctPin = student.pinCode || "1234";
+
+    if (inputPin === correctPin) {
+      const userId = String(ctx.from.id);
+      const username = ctx.from.username || null;
+
+      // Link student
+      await prisma.student.update({
+        where: { id: studentId },
+        data: {
+          telegramId: userId,
+          username: username,
+        },
+      });
+
+      await ctx.reply(
+        `🎉 <b>Tabriklaymiz, ${student.fullName}!</b>\n\n` +
+        `PIN-kod to'g'ri kiritildi va Telegram hisobingiz sinf ro'yxatiga muvaffaqiyatli biriktirildi.\n\n` +
+        `Endi dars jadvalini ko'rishingiz, AI testlarini yechishingiz va ball to'plashingiz mumkin! 🚀`,
+        {
+          parse_mode: "HTML",
+          reply_markup: getStudentMainMenu(),
+        }
+      );
+      return;
+    }
+
+    attempts--;
+    if (attempts > 0) {
+      await ctx.reply(
+        `❌ <b>Noto'g'ri PIN-kod!</b>\n` +
+        `Qolgan urinishlar: <b>${attempts} ta</b>.\n\n` +
+        `Iltimos, o'qituvchingizdan PIN-kodni so'rab, qaytadan kiriting (yoki /cancel deb yozing):`,
+        { parse_mode: "HTML" }
+      );
+    } else {
+      return ctx.reply(
+        "❌ <b>Urinishlar soni tugadi!</b>\nO'qituvchingiz bilan bog'lanib PIN-kodingizni aniqlashtiring va qaytadan /start bosing.",
+        { parse_mode: "HTML" }
+      );
+    }
+  }
 }
