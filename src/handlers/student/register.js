@@ -34,13 +34,22 @@ export async function linkStudentCallback(ctx) {
  * Conversation: Verify Student PIN-code
  */
 export async function verifyStudentPinConversation(conversation, ctx) {
-  const studentId = ctx.session.selectedStudentId;
-  if (!studentId) {
+  let studentId = null;
+
+  if (ctx.callbackQuery?.data?.startsWith("link_student:")) {
+    studentId = parseInt(ctx.callbackQuery.data.split(":")[1], 10);
+  } else if (ctx.session?.selectedStudentId) {
+    studentId = ctx.session.selectedStudentId;
+  }
+
+  if (!studentId || isNaN(studentId)) {
     return ctx.reply("❌ Xatolik yuz berdi. Iltimos /start buyrug'ini qaytadan bosing.");
   }
 
-  const student = await prisma.student.findUnique({
-    where: { id: studentId },
+  const student = await conversation.external(async () => {
+    return await prisma.student.findUnique({
+      where: { id: studentId },
+    });
   });
 
   if (!student || student.telegramId) {
@@ -70,12 +79,14 @@ export async function verifyStudentPinConversation(conversation, ctx) {
       const username = ctx.from.username || null;
 
       // Link student
-      await prisma.student.update({
-        where: { id: studentId },
-        data: {
-          telegramId: userId,
-          username: username,
-        },
+      await conversation.external(async () => {
+        await prisma.student.update({
+          where: { id: studentId },
+          data: {
+            telegramId: userId,
+            username: username,
+          },
+        });
       });
 
       await ctx.reply(
