@@ -1,6 +1,28 @@
 import { prisma } from "../src/database/prisma.js";
 
-const remainingSchedule = [
+const fullWeekSchedule = [
+  // Dushanba (1)
+  { dayOfWeek: 1, lessonOrder: 1, subject: "Kelajak soati", teacher: "12:15 - 13:30" },
+  { dayOfWeek: 1, lessonOrder: 2, subject: "Ingliz tili", teacher: "13:05 - 13:50" },
+  { dayOfWeek: 1, lessonOrder: 3, subject: "Jismoniy tarbiya", teacher: "13:55 - 14:40" },
+  { dayOfWeek: 1, lessonOrder: 4, subject: "Matematika", teacher: "14:50 - 15:35" },
+  { dayOfWeek: 1, lessonOrder: 5, subject: "Adabiyot", teacher: "15:40 - 16:25" },
+
+  // Seshanba (2)
+  { dayOfWeek: 2, lessonOrder: 1, subject: "Matematika", teacher: "12:15 - 13:00" },
+  { dayOfWeek: 2, lessonOrder: 2, subject: "Ingliz tili", teacher: "13:05 - 13:50" },
+  { dayOfWeek: 2, lessonOrder: 3, subject: "Science", teacher: "13:55 - 14:40" },
+  { dayOfWeek: 2, lessonOrder: 4, subject: "Texnologiya", teacher: "14:50 - 15:35" },
+  { dayOfWeek: 2, lessonOrder: 5, subject: "Texnologiya", teacher: "15:40 - 16:25" },
+
+  // Chorshanba (3)
+  { dayOfWeek: 3, lessonOrder: 1, subject: "Musiqa", teacher: "12:15 - 13:00" },
+  { dayOfWeek: 3, lessonOrder: 2, subject: "Tarix", teacher: "13:05 - 13:50" },
+  { dayOfWeek: 3, lessonOrder: 3, subject: "Ingliz tili", teacher: "13:55 - 14:40" },
+  { dayOfWeek: 3, lessonOrder: 4, subject: "Matematika", teacher: "14:50 - 15:35" },
+  { dayOfWeek: 3, lessonOrder: 5, subject: "Tarbiya", teacher: "15:40 - 16:25" },
+  { dayOfWeek: 3, lessonOrder: 6, subject: "Ona tili", teacher: "16:30 - 17:15" },
+
   // Payshanba (4)
   { dayOfWeek: 4, lessonOrder: 1, subject: "Tasviriy san'at", teacher: "12:15 - 13:00" },
   { dayOfWeek: 4, lessonOrder: 2, subject: "Ona tili", teacher: "13:05 - 13:50" },
@@ -24,7 +46,7 @@ const remainingSchedule = [
 ];
 
 async function addSchedule() {
-  for (const item of remainingSchedule) {
+  for (const item of fullWeekSchedule) {
     await prisma.schedule.upsert({
       where: {
         dayOfWeek_lessonOrder: {
@@ -45,7 +67,7 @@ async function addSchedule() {
     });
   }
 
-  console.log("✅ Payshanba, Juma va Shanba dars jadvallari muvaffaqiyatli saqlandi!");
+  console.log("🎉 BARCHA 6 KUNLIK DARS JADVALLARI (Dushanba-Shanba, 31 ta dars) MUVAFFAQIYATLI SAQLANDI!");
   process.exit(0);
 }
 
