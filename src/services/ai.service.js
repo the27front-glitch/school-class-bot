@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { config } from "../config/config.js";
 import { prisma } from "../database/prisma.js";
+import { QUESTION_BANK_GRADE_6 } from "./questionBank.js";
 
 export const GRADE_6_SUBJECTS = [
   "Ona tili",
@@ -89,7 +90,14 @@ TALABLAR:
     }
   }
 
-  throw lastError || new Error("AI savollarni generatsiya qila olmadi.");
+  // Fallback if AI provider is blocked by location (e.g. Uzbekistan datacenter IP) or temporarily down
+  console.log(`⚠️ AI server cheklovi (User location / 503) sababli 6-sinf "${subject}" darslik testlar bazasidan 15 ta savol olindi.`);
+  const fallbackQuestions = QUESTION_BANK_GRADE_6[subject] || QUESTION_BANK_GRADE_6["Matematika"];
+  return {
+    subject,
+    title: `6-sinf ${subject} fani bo'yicha haftalik test`,
+    questions: fallbackQuestions,
+  };
 }
 
 /**
