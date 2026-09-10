@@ -15,6 +15,9 @@ import {
   showDeleteStudentMenu,
   deleteStudentCallback,
   giveBonusConversation,
+  confirmResetAllStudents,
+  executeResetAllStudents,
+  cancelResetAllStudents,
 } from "./handlers/admin/students.js";
 import {
   startAttendanceHandler,
@@ -84,6 +87,8 @@ bot.command("cancel", async (ctx) => {
   return ctx.reply("❌ Joriy amal bekor qilindi.");
 });
 bot.command("davomat", startAttendanceHandler);
+bot.command("clear_all", confirmResetAllStudents);
+bot.command("reset_students", confirmResetAllStudents);
 bot.command("statistika", async (ctx) => {
   if (isAdmin(ctx.from.id)) {
     return exportMonthlyStatsHandler(ctx);
@@ -135,6 +140,9 @@ bot.callbackQuery("admin_add_student", (ctx) => {
 });
 bot.callbackQuery("admin_delete_student_list", showDeleteStudentMenu);
 bot.callbackQuery(/^del_student:/, deleteStudentCallback);
+bot.callbackQuery("admin_reset_all_confirm", confirmResetAllStudents);
+bot.callbackQuery("admin_reset_all_execute", executeResetAllStudents);
+bot.callbackQuery("admin_reset_all_cancel", cancelResetAllStudents);
 bot.callbackQuery("admin_edit_schedule", (ctx) => {
   ctx.answerCallbackQuery();
   return ctx.conversation.enter("editScheduleConversation");

@@ -37,12 +37,76 @@ export async function showStudentsList(ctx) {
   const keyboard = new InlineKeyboard()
     .text("➕ Yangi o'quvchi qo'shish", "admin_add_student")
     .row()
-    .text("🗑 O'quvchini o'chirish", "admin_delete_student_list");
+    .text("🗑 O'quvchini o'chirish", "admin_delete_student_list")
+    .row()
+    .text("⚠️ Barcha ballarni 0 qilish & uzish", "admin_reset_all_confirm");
 
   return ctx.reply(text, {
     parse_mode: "HTML",
     reply_markup: keyboard,
   });
+}
+
+/**
+ * Confirm resetting all students and points
+ */
+export async function confirmResetAllStudents(ctx) {
+  if (!isAdmin(ctx.from.id)) return;
+  if (ctx.callbackQuery) await ctx.answerCallbackQuery();
+
+  const keyboard = new InlineKeyboard()
+    .text("✅ Ha, barchasini tozalash", "admin_reset_all_execute")
+    .text("❌ Bekor qilish", "admin_reset_all_cancel");
+
+  const msg =
+    "⚠️ <b>DIQQAT! HAMMA FOYDALANUVChI VA BALLARNI TOZALASH:</b>\n\n" +
+    "Ushbu amal bajarilsa:\n" +
+    "• Barcha o'quvchilarning to'plagan ballari <b>0</b> qilinadi;\n" +
+    "• Barcha Telegram akkauntlar <b>uziladi</b> (o'quvchilar /start bosib PIN bilan qaytadan ulanishadi);\n" +
+    "• Test topshirish natijalari tarixi tozalanadi;\n" +
+    "• O'quvchilarning ismlari va PIN-kodlari saqlab qolinadi.\n\n" +
+    "<b>Rostdan ham barchasini tozalashni tasdiqlaysizmi?</b>";
+
+  if (ctx.callbackQuery) {
+    return ctx.reply(msg, { parse_mode: "HTML", reply_markup: keyboard });
+  }
+  return ctx.reply(msg, { parse_mode: "HTML", reply_markup: keyboard });
+}
+
+/**
+ * Execute resetting all students
+ */
+export async function executeResetAllStudents(ctx) {
+  if (!isAdmin(ctx.from.id)) return;
+  await ctx.answerCallbackQuery();
+
+  const updated = await prisma.student.updateMany({
+    data: {
+      points: 0,
+      bonusPoints: 0,
+      telegramId: null,
+      username: null,
+    },
+  });
+
+  await prisma.quizSubmission.deleteMany();
+
+  return ctx.editMessageText(
+    `🎉 <b>Muvaffaqiyatli tozalandi!</b>\n\n` +
+    `• Jami <b>${updated.count} ta</b> o'quvchi qayta tiklandi;\n` +
+    `• Barcha test va bonus ballar <b>0</b> qilindi;\n` +
+    `• Barcha Telegram hisoblari uzildi.\n\n` +
+    `Ertaga ota-onalar va o'quvchilar botga kirib /start bosganda o'z PIN-kodlari bilan noldan ulanishadi! 🚀`,
+    { parse_mode: "HTML" }
+  );
+}
+
+/**
+ * Cancel reset
+ */
+export async function cancelResetAllStudents(ctx) {
+  await ctx.answerCallbackQuery({ text: "Tozalash bekor qilindi" });
+  return ctx.editMessageText("❌ Tozalash amali bekor qilindi.");
 }
 
 /**
