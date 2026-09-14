@@ -105,14 +105,36 @@ export async function startQuizCallback(ctx) {
     return ctx.answerCallbackQuery({ text: "Siz bu testni allaqachon topshirgansiz!", show_alert: true });
   }
 
-  // Initialize session
+  // Initialize session with dynamically randomized options for this student
   const sessionKey = `${student.id}_${quiz.id}`;
+  const randomizedQuestions = quiz.questions.map((q) => {
+    let opts;
+    try {
+      opts = typeof q.options === "string" ? JSON.parse(q.options) : q.options;
+    } catch {
+      opts = q.options;
+    }
+    const correctVal = opts[q.correctIndex !== undefined ? q.correctIndex : 0];
+    const shuffledOpts = [...opts];
+    for (let i = shuffledOpts.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledOpts[i], shuffledOpts[j]] = [shuffledOpts[j], shuffledOpts[i]];
+    }
+    const newCorrectIdx = shuffledOpts.indexOf(correctVal);
+
+    return {
+      ...q,
+      options: JSON.stringify(shuffledOpts),
+      correctIndex: newCorrectIdx >= 0 ? newCorrectIdx : 0,
+    };
+  });
+
   activeStudentSessions.set(sessionKey, {
     quizId,
     studentId: student.id,
     questionIndex: 0,
     answers: [],
-    questions: quiz.questions,
+    questions: randomizedQuestions,
   });
 
   await ctx.answerCallbackQuery();
