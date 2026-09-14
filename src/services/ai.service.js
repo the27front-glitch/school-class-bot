@@ -29,6 +29,30 @@ function getAiClient() {
 }
 
 /**
+ * Fisher-Yates shuffle options of a question and recalculate correctIndex
+ * Ensures A, B, C, D have equal 25% distribution across all questions
+ * @param {{ text: string, options: string[] | string, correctIndex: number }} q
+ */
+export function shuffleQuestion(q) {
+  const options = Array.isArray(q.options) ? [...q.options] : JSON.parse(q.options);
+  const correctOption = options[q.correctIndex !== undefined ? q.correctIndex : 0];
+
+  // Fisher-Yates shuffle
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+
+  const newCorrectIndex = options.indexOf(correctOption);
+
+  return {
+    ...q,
+    options: options,
+    correctIndex: newCorrectIndex >= 0 ? newCorrectIndex : 0,
+  };
+}
+
+/**
  * Generate 15 multiple-choice questions for 6th grade using Gemini AI
  * @param {string} subject
  * @returns {Promise<{ subject: string, title: string, questions: Array<{ text: string, options: string[], correctIndex: number }> }>}
@@ -44,7 +68,7 @@ TALABLAR:
 1. Savollar faqat va faqat O'zbekiston 6-sinf "${subject}" darsligi mavzulariga oid bo'lishi shart!
 2. Jami SAVOLLAR SONI: aynan 15 ta bo'lsin.
 3. Har bir savolda 4 ta variant (A, B, C, D) bo'lsin.
-4. To'g'ri javob indeksi correctIndex (0 = 1-variant, 1 = 2-variant, 2 = 3-variant, 3 = 4-variant) ko'rsatilsin.
+4. JUDA MUHIM: To'g'ri javob (correctIndex) 15 ta savol bo'ylab A (0), B (1), C (2) va D (3) variantlarga TENG va TASODIFIY taqsimlansin! Barcha yoki ko'pchilik savollarning to'g'ri javobi faqat bitta variant (A) bo'lib qolmasin.
 5. Javobni FAQAT quyidagi JSON formatida qaytaring, hech qanday qo'shimcha so'z yoki markdown belgilarisiz:
 
 {
@@ -53,8 +77,8 @@ TALABLAR:
   "questions": [
     {
       "text": "Savol matni?",
-      "options": ["A varianti", "B varianti", "C varianti", "D varianti"],
-      "correctIndex": 0
+      "options": ["Variant 1", "Variant 2", "Variant 3", "Variant 4"],
+      "correctIndex": 2
     }
   ]
 }
@@ -82,6 +106,7 @@ TALABLAR:
       const quizData = JSON.parse(responseText);
 
       if (quizData.questions && quizData.questions.length > 0) {
+        quizData.questions = quizData.questions.map(shuffleQuestion);
         return quizData;
       }
     } catch (err) {
@@ -92,7 +117,8 @@ TALABLAR:
 
   // Fallback if AI provider is blocked by location (e.g. Uzbekistan datacenter IP) or temporarily down
   console.log(`⚠️ AI server cheklovi (User location / 503) sababli 6-sinf "${subject}" darslik testlar bazasidan 15 ta savol olindi.`);
-  const fallbackQuestions = QUESTION_BANK_GRADE_6[subject] || QUESTION_BANK_GRADE_6["Matematika"];
+  const rawFallback = QUESTION_BANK_GRADE_6[subject] || QUESTION_BANK_GRADE_6["Matematika"];
+  const fallbackQuestions = rawFallback.map(shuffleQuestion);
   return {
     subject,
     title: `6-sinf ${subject} fani bo'yicha haftalik test`,
@@ -134,8 +160,8 @@ export async function createAndPublishAiQuiz(subject = null, durationHours = 48,
 
   const deadline = new Date(Date.now() + durationHours * 60 * 60 * 1000);
 
-  // Format questions for Prisma
-  const questionsData = quizData.questions.map((q) => ({
+  // Format questions for Prisma with guaranteed random option distribution
+  const questionsData = quizData.questions.map(shuffleQuestion).map((q) => ({
     text: q.text,
     options: JSON.stringify(q.options),
     correctIndex: q.correctIndex,

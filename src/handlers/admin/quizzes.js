@@ -45,12 +45,67 @@ export async function showAdminQuizzes(ctx) {
   const keyboard = new InlineKeyboard()
     .text("⚡️ AI Test yaratish (Hozir)", "admin_ai_generate_menu")
     .row()
+    .text("🔀 Variantlarni aralashtirish (A,B,C,D)", "admin_shuffle_quizzes")
+    .row()
     .text("🔒 Testni muddatidan oldin yopish", "admin_close_quiz_list");
 
   return ctx.reply(text, {
     parse_mode: "HTML",
     reply_markup: keyboard,
   });
+}
+
+/**
+ * Re-shuffle options for all questions so answers are distributed evenly across A, B, C, D
+ */
+export async function shuffleActiveQuizzesHandler(ctx) {
+  if (!isAdmin(ctx.from.id)) return;
+  if (ctx.callbackQuery) await ctx.answerCallbackQuery({ text: "Variantlar aralashtirilmoqda..." });
+
+  const questions = await prisma.question.findMany({
+    where: {
+      quiz: { isActive: true },
+    },
+  });
+
+  if (questions.length === 0) {
+    return ctx.reply("ℹ️ Hozirda faol testlar va savollar topilmadi.");
+  }
+
+  const { shuffleQuestion } = await import("../../services/ai.service.js");
+  const letters = ["A", "B", "C", "D"];
+  const stats = { A: 0, B: 0, C: 0, D: 0 };
+
+  for (const q of questions) {
+    const shuffled = shuffleQuestion({
+      text: q.text,
+      options: q.options,
+      correctIndex: q.correctIndex,
+    });
+
+    const letter = letters[shuffled.correctIndex] || "A";
+    stats[letter] = (stats[letter] || 0) + 1;
+
+    await prisma.question.update({
+      where: { id: q.id },
+      data: {
+        options: JSON.stringify(shuffled.options),
+        correctIndex: shuffled.correctIndex,
+      },
+    });
+  }
+
+  return ctx.reply(
+    `🔀 <b>Variantlar muvaffaqiyatli aralashtirildi!</b>\n\n` +
+    `Jami <b>${questions.length} ta</b> savolning javob variantlari tasodifiy joylashtirildi.\n\n` +
+    `📊 <b>Yangi to'g'ri javoblar taqsimoti:</b>\n` +
+    `• <b>A:</b> ${stats.A || 0} ta\n` +
+    `• <b>B:</b> ${stats.B || 0} ta\n` +
+    `• <b>C:</b> ${stats.C || 0} ta\n` +
+    `• <b>D:</b> ${stats.D || 0} ta\n\n` +
+    `Endi o'quvchilar test yechganda to'g'ri javoblar barcha variantlarga (A, B, C, D) teng taqsimlanadi! 🎯`,
+    { parse_mode: "HTML" }
+  );
 }
 
 /**

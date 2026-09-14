@@ -38,6 +38,7 @@ import {
   triggerAiQuizCallback,
   showCloseQuizMenu,
   closeQuizCallback,
+  shuffleActiveQuizzesHandler,
 } from "./handlers/admin/quizzes.js";
 import {
   showAvailableQuizzes,
@@ -89,6 +90,7 @@ bot.command("cancel", async (ctx) => {
 bot.command("davomat", startAttendanceHandler);
 bot.command("clear_all", confirmResetAllStudents);
 bot.command("reset_students", confirmResetAllStudents);
+bot.command("shuffle_quiz", shuffleActiveQuizzesHandler);
 bot.command("statistika", async (ctx) => {
   if (isAdmin(ctx.from.id)) {
     return exportMonthlyStatsHandler(ctx);
@@ -154,6 +156,7 @@ bot.callbackQuery(/^admin_clear_day:/, clearSpecificDay);
 bot.callbackQuery("admin_cancel_clear", cancelClearSchedule);
 bot.callbackQuery("admin_ai_generate_menu", showAiSubjectMenu);
 bot.callbackQuery(/^ai_gen_subj:/, triggerAiQuizCallback);
+bot.callbackQuery("admin_shuffle_quizzes", shuffleActiveQuizzesHandler);
 bot.callbackQuery("admin_close_quiz_list", showCloseQuizMenu);
 bot.callbackQuery(/^admin_close_q:/, closeQuizCallback);
 
